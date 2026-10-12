@@ -81,7 +81,12 @@ You will load those files into new collections, list what is there, add two book
 
 Run the load from the repository's top-level directory so `authors.json` and `books.json` resolve in steps 3 and 4. 
 
-1. Connect to MongoDB Atlas using `mongosh` and your Atlas credentials (see [Get Connection String](https://github.com/ksiller/DS2022/blob/main/setup/mongodb.md#3-get-connection-string-url) in the setup instructions).
+1. From the repository's top-level directory, connect to MongoDB Atlas using `mongosh` and your Atlas credentials (see [Get Connection String](https://github.com/ksiller/DS2022/blob/main/setup/mongodb.md#3-get-connection-string-url) in the setup instructions). This command uses the URL and username from your environment and prompts for your password; do not put the password directly in the command.
+
+   ```bash
+   mongosh "$MONGODB_ATLAS_URL" --apiVersion 1 --username "$MONGODB_ATLAS_USER"
+   ```
+
 2. Create a new database named `bookstore`. The database is created when you first write to it. At the `mongosh` prompt, switch to it before steps 3–8:
 
    ```javascript
@@ -90,26 +95,26 @@ Run the load from the repository's top-level directory so `authors.json` and `bo
 
 3. Drop any existing `authors` collection so a second run does not insert the same authors twice. Then load `authors.json`. Each document sets `_id` to a value such as `"author_001"`. That id is reloaded with the file. MongoDB generates a hex `_id` only when you leave `_id` out. Set `_id` yourself so `books` can refer to the same author after a reload.
 
-```javascript
-db.authors.drop()
-doc = JSON.parse(fs.readFileSync("authors.json", "utf8"))
-db.authors.insertMany(doc)
-```
+   ```javascript
+   db.authors.drop();
+   var authors = JSON.parse(fs.readFileSync("authors.json", "utf8"));
+   db.authors.insertMany(authors);
+   ```
 
 4. Initialize a `books` collection with `books.json` in the same manner.
 
-```javascript
-db.books.drop()
-doc = JSON.parse(fs.readFileSync("books.json", "utf8"))
-db.books.insertMany(doc)
-```
+   ```javascript
+   db.books.drop();
+   var books = JSON.parse(fs.readFileSync("books.json", "utf8"));
+   db.books.insertMany(books);
+   ```
 
 5. List every author and every book.
 
-```javascript
-db.authors.find()
-db.books.find()
-```
+   ```javascript
+   db.authors.find().forEach(printjson);
+   db.books.find().forEach(printjson);
+   ```
 
 6. Insert two new books of your choosing. Each book needs:
 
@@ -118,6 +123,23 @@ db.books.find()
    - `author_ids` with one or more author `_id` values
 
    An id in `author_ids` may already be in the loaded data, or it may belong to someone you are about to add. At least one author across the two books must be new, so the next step inserts at least one author. Pick a new `_id` that is not already used, such as `"author_004"`.
+
+   For example, add one book by an existing author and one by a new author:
+
+   ```javascript
+   db.books.insertMany([
+     {
+       title: "The Wee Free Men",
+       published_year: 2003,
+       author_ids: ["author_003"],
+     },
+     {
+       title: "Howl's Moving Castle",
+       published_year: 1986,
+       author_ids: ["author_004"],
+     },
+   ]);
+   ```
 
 7. Add every missing author of those two books. An author is missing when no document in the `authors` collection has that `_id`. MongoDB does not check that this author document exists when you save the book, so add the missing authors yourself. Each new `_id` must be unique.
 
@@ -128,37 +150,78 @@ db.books.find()
    - `nationality`
    - `bio` (`short` and `long`)
 
+   The new book above references Diana Wynne Jones as `author_004`, so add her document:
+
+   ```javascript
+   db.authors.insertOne({
+     _id: "author_004",
+     name: "Diana Wynne Jones",
+     nationality: "British",
+     bio: {
+       short: "British author of fantasy novels for children and adults.",
+       long: "Diana Wynne Jones was a British writer known for imaginative fantasy novels, including Howl's Moving Castle.",
+     },
+   });
+   ```
+
 8. Filter books by a list of authors. Include at least one author you added in step 7 and at least one author from the loaded files. A book matches when any value in `author_ids` equals an author’s `_id`. Example:
 
-```javascript
-db.books.find({ author_ids: { $in: ["author_001", "author_004"] } })
-```
+   ```javascript
+   db.books
+     .find({ author_ids: { $in: ["author_003", "author_004"] } })
+     .forEach(printjson);
+   ```
 
-9. Copy the commands from steps 3–8 into `bookstore.js` in the top-level directory of your clone. Label each part with a comment. The owner reruns that file instead of `history()`. **Note:  `use bookstore` works only when you type it at the `mongosh` prompt. Inside `bookstore.js` it is not valid JavaScript.** Switch databases with `db = db.getSiblingDB("bookstore")`, like so, then add your commands from steps 3-8:
+9. Save the commands from steps 3–8 in `bookstore.js` in the top-level directory of your clone, with a comment labeling each part. **Note: `use bookstore` works only at the `mongosh` prompt; inside `bookstore.js`, switch databases with `db = db.getSiblingDB("bookstore")`.** With the example books and author above, the complete file is:
 
-```javascript
-// Step 2: 
-// use bookstore 
-db = db.getSiblingDB("bookstore")
+   ```javascript
+   // Step 2: select the bookstore database.
+   db = db.getSiblingDB("bookstore");
 
-// Step 3: load authors.json
-// paste your drop and insertMany commands here
+   // Step 3: reload the starter authors.
+   db.authors.drop();
+   var authors = JSON.parse(fs.readFileSync("authors.json", "utf8"));
+   db.authors.insertMany(authors);
 
-// Step 4: load books.json
-// paste your drop and insertMany commands here
+   // Step 4: reload the starter books.
+   db.books.drop();
+   var books = JSON.parse(fs.readFileSync("books.json", "utf8"));
+   db.books.insertMany(books);
 
-// Step 5: list authors and books
-// paste your find commands here
+   // Step 5: list all loaded authors and books.
+   db.authors.find().forEach(printjson);
+   db.books.find().forEach(printjson);
 
-// Step 6: insert two new books
-// paste your insert commands here
+   // Step 6: add two books, including one by an author not in the starter data.
+   db.books.insertMany([
+     {
+       title: "The Wee Free Men",
+       published_year: 2003,
+       author_ids: ["author_003"],
+     },
+     {
+       title: "Howl's Moving Castle",
+       published_year: 1986,
+       author_ids: ["author_004"],
+     },
+   ]);
 
-// Step 7: add missing authors
-// paste your insert commands here
+   // Step 7: add the missing author referenced by Howl's Moving Castle.
+   db.authors.insertOne({
+     _id: "author_004",
+     name: "Diana Wynne Jones",
+     nationality: "British",
+     bio: {
+       short: "British author of fantasy novels for children and adults.",
+       long: "Diana Wynne Jones was a British writer known for imaginative fantasy novels, including Howl's Moving Castle.",
+     },
+   });
 
-// Step 8: filter books by a list of authors
-// paste your find command here
-```
+   // Step 8: find books by a starter-data author and the added author.
+   db.books
+     .find({ author_ids: { $in: ["author_003", "author_004"] } })
+     .forEach(printjson);
+   ```
 
 Run `bookstore.js` from the repository's top-level directory, so `authors.json` and `books.json` are found. Connect, enter your Atlas password, then load the file:
 
